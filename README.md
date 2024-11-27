@@ -76,6 +76,27 @@ effect = dm.freeverb_demo;
 
 to get a polyphonic clarinet instrument with 16 voices and a global reverb effect.
 
+### HTML Attributes
+
+`<faust-editor>` supports configurtion via the addition of HTML attributes. 
+Available attributes are:
+
+- `tab` — the initial tab to display when the "Run" button is clicked; 
+one of `"ui"`, `"svg"`, `"scope"` or `"spectrum"`.
+- `sizes` — a JSON array of exactly two numerical elements representing the ratio of the initial editor/visualiser split
+when the "Run" button is clicked (default `"[70,30]"`).
+- `lineNumbers` — whether to display line numbers in the code editor; `"true"` (default) or `"false"`.
+
+For example:
+
+```html
+<faust-editor tab="svg" sizes="[3,2]" lineNumbers="false">
+<!--
+process = +;
+-->
+</faust-editor>
+```
+
 ## NPM package 
 
  A [npm package](https://www.npmjs.com/package/@grame/faust-web-component) can be used with the CDN link: https://cdn.jsdelivr.net/npm/@grame/faust-web-component@0.3.2/dist/faust-web-component.js (possibly update the version number).
@@ -106,6 +127,17 @@ Concrete use-cases can be seen:
 
 - in the [Faust documentation site](https://faustdoc.grame.fr).
 - in this [faust-web-widget](https://codepen.io/St-phane-Letz/pen/LYMWybP) and [faust-web-editor](https://codepen.io/St-phane-Letz/pen/YzdZZoK) editable pages.
+
+## Development
+
+To start a development server, run the following in the top-level directory:
+
+```shell
+npm run dev
+```
+
+Follow the Local url that appears and you'll be served the contents of 
+`index.html`. Changes to files in `src` will trigger a live-reload.
 
 ## TODO
 

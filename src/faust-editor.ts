@@ -1,12 +1,19 @@
 import { icon } from "@fortawesome/fontawesome-svg-core"
-import { FaustMonoDspGenerator, FaustPolyDspGenerator, IFaustMonoWebAudioNode } from "@grame/faustwasm"
+import {FaustMonoDspGenerator, FaustPolyDspGenerator, FaustUIDescriptor, IFaustMonoWebAudioNode} from "@grame/faustwasm"
 import { FaustUI } from "@shren/faust-ui"
 import faustCSS from "@shren/faust-ui/dist/esm/index.css?inline"
 import Split from "split.js"
 import { faustPromise, audioCtx, compiler, svgDiagrams, default_generator, get_mono_generator, get_poly_generator, getInputDevices, deviceUpdateCallbacks, accessMIDIDevice, midiInputCallback, extractMidiAndNvoices } from "./common"
-import { createEditor, setError, clearError } from "./editor"
+import { editorConfig, createEditor, setError, clearError } from "./editor"
 import { Scope } from "./scope"
 import faustSvg from "./faustText.svg"
+
+enum Tab {
+    UI,
+    SVG,
+    SCOPE,
+    SPECTRUM
+}
 
 const template = document.createElement("template")
 template.innerHTML = `
@@ -230,7 +237,8 @@ export default class FaustEditor extends HTMLElement {
         }
 
         const editorEl = this.shadowRoot!.querySelector("#editor") as HTMLDivElement
-        const editor = createEditor(editorEl, code)
+        const config: editorConfig = {showLineNumbers: JSON.parse(this.getAttribute("lineNumbers") ?? "true")};
+        const editor = createEditor(editorEl, code, config);
 
         const runButton = this.shadowRoot!.querySelector("#run") as HTMLButtonElement
         const stopButton = this.shadowRoot!.querySelector("#stop") as HTMLButtonElement
@@ -251,16 +259,16 @@ export default class FaustEditor extends HTMLElement {
 
         faustPromise.then(() => runButton.disabled = false)
 
-        const defaultSizes = [70, 30]
         let sidebarOpen = false
         const openSidebar = () => {
             if (!sidebarOpen) {
-                split.setSizes(defaultSizes)
+                split.setSizes(calculateSplitSizes())
             }
             sidebarOpen = true
         }
 
         let node: IFaustMonoWebAudioNode | undefined
+        let ui: FaustUIDescriptor | undefined
         let input: MediaStreamAudioSourceNode | undefined
         let analyser: AnalyserNode | undefined
         let scope: Scope | undefined
@@ -341,22 +349,41 @@ export default class FaustEditor extends HTMLElement {
             scope = new Scope(tabContents[2])
             spectrum = new Scope(tabContents[3])
 
-            // If there are UI elements, open Faust UI (controls tab); otherwise open spectrum analyzer.
-            const ui = node.getUI()
-            openTab(ui.length > 1 || ui[0].items.length > 0 ? 0 : 3)
-
-            // Create controls via Faust UI
-            const faustUI = new FaustUI({ ui, root: faustUIRoot })
-            faustUI.paramChangeByUI = (path, value) => node?.setParamValue(path, value)
-            node.setOutputParamHandler((path, value) => faustUI.paramChangeByDSP(path, value))
-
             // Create SVG block diagram
             setSVG(svgDiagrams.from("main", code, "")["process.svg"])
 
-            // Set editor size to fit UI size
-            editorEl.style.height = `${Math.max(125, faustUI.minHeight)}px`;
-            faustUIRoot.style.width = faustUI.minWidth * 1.25 + "px"
-            faustUIRoot.style.height = faustUI.minHeight * 1.25 + "px"
+            ui = node.getUI()
+
+            // If a "tab" attribute has been set, try to get the index of the tab to show on run.
+            // As a fallback, if there are UI elements, open Faust UI (controls tab);
+            // otherwise open the spectrum analyzer.
+            const initialTab: string = (this.getAttribute("tab") ?? "").toUpperCase()
+            const tab: Tab = Tab[initialTab as keyof typeof Tab] ??
+                (ui.length > 1 || ui[0].items.length > 0 ? Tab.UI : Tab.SPECTRUM)
+
+            openTab(tab)
+        }
+
+        const calculateSplitSizes: () => number[] = () => {
+            const tryToReadSizes = () => {
+                try {
+                    return JSON.parse(this.getAttribute("sizes") ?? "[]");
+                } catch (_) {
+                    return []
+                }
+            };
+            // Attempt to read a "sizes" attribute.
+            const sizes: number[] = tryToReadSizes()
+            // Check whether it's a valid array of two numbers
+            if (sizes.constructor === Array
+                && sizes.length == 2
+                && sizes.every(s => s.constructor === Number)) {
+                // Normalise to percentages.
+                const ratio = 100 / (sizes[0] + sizes[1])
+                return sizes.map(s => s * ratio)
+            }
+
+            return [70, 30];
         }
 
         const setSVG = (svgString: string) => {
@@ -387,9 +414,9 @@ export default class FaustEditor extends HTMLElement {
             animPlot = requestAnimationFrame(drawSpectrum)
         }
 
-        const openTab = (i: number) => {
+        const openTab = (t: Tab) => {
             for (const [j, tab] of tabButtons.entries()) {
-                if (i === j) {
+                if (t === j) {
                     tab.classList.add("active")
                     tabContents[j].classList.add("active")
                 } else {
@@ -397,17 +424,28 @@ export default class FaustEditor extends HTMLElement {
                     tabContents[j].classList.remove("active")
                 }
             }
-            if (i === 2) {
-                scope!.onResize()
-                if (animPlot !== undefined) cancelAnimationFrame(animPlot)
-                animPlot = requestAnimationFrame(drawScope)
-            } else if (i === 3) {
-                spectrum!.onResize()
-                if (animPlot !== undefined) cancelAnimationFrame(animPlot)
-                animPlot = requestAnimationFrame(drawSpectrum)
-            } else if (animPlot !== undefined) {
-                cancelAnimationFrame(animPlot)
-                animPlot = undefined
+
+            if (t === Tab.UI) {
+                // Create controls via Faust UI
+                const faustUI = new FaustUI({ ui, root: faustUIRoot })
+                faustUI.paramChangeByUI = (path, value) => node?.setParamValue(path, value)
+                node?.setOutputParamHandler((path, value) => faustUI?.paramChangeByDSP(path, value))
+                sidebarContent.style.minHeight = `${faustUI?.minHeight ?? 100}px`
+            } else {
+                sidebarContent.style.minHeight = ""
+            }
+
+            if (t === Tab.SCOPE) {
+                scope!.onResize();
+                typeof animPlot === "number" && cancelAnimationFrame(animPlot)
+                animPlot = requestAnimationFrame(drawScope);
+            } else if (t === Tab.SPECTRUM) {
+                spectrum!.onResize();
+                typeof animPlot === "number" && cancelAnimationFrame(animPlot)
+                animPlot = requestAnimationFrame(drawSpectrum);
+            } else if (typeof animPlot === "number") {
+                cancelAnimationFrame(animPlot);
+                animPlot = undefined;
             }
         }
 
