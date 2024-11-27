@@ -117,7 +117,7 @@ export default class FaustWidget extends HTMLElement {
         let input: MediaStreamAudioSourceNode | undefined
         let faustUI: FaustUI
         let generator: FaustMonoDspGenerator | FaustPolyDspGenerator
-        let sourceNode: AudioBufferSourceNode = undefined;
+        let sourceNode: AudioBufferSourceNode | undefined;
 
         const setup = async () => {
             await faustPromise

@@ -33,8 +33,8 @@ template.innerHTML = `
         <!-- TODO: volume control? <input id="volume" type="range" min="0" max="100"> -->
         <a title="Faust website" id="faust" href="https://faust.grame.fr/" target="_blank"><img src="${faustSvg}" height="15px" /></a>
     </div>
-    <div id="content">
-        <div id="editor"></div>
+    <div id="content" part="content">
+        <div id="editor" part="editor"></div>
         <div id="sidebar">
             <div id="sidebar-buttons">
                 <button title="Controls" id="tab-ui" class="button tab" disabled>${icon({ prefix: "fas", iconName: "sliders" }).html[0]}</button>
@@ -86,8 +86,8 @@ template.innerHTML = `
     }
 
     #faust-diagram {
-        max-width: 232px;
-        height: 150px;
+        max-width: 100%;
+        /*height: 150px;*/
     }
 
     #content {
@@ -101,6 +101,7 @@ template.innerHTML = `
 
     #editor .cm-editor {
         height: 100%;
+        text-align: left;
     }
 
     .cm-diagnostic {
@@ -275,7 +276,7 @@ export default class FaustEditor extends HTMLElement {
         let spectrum: Scope | undefined
         let gmidi = false
         let gnvoices = -1
-        let sourceNode: AudioBufferSourceNode = undefined;
+        let sourceNode: AudioBufferSourceNode | undefined;
 
         runButton.onclick = async () => {
             if (audioCtx.state === "suspended") {
