@@ -5,7 +5,7 @@ import {history, defaultKeymap, historyKeymap} from "@codemirror/commands"
 import {indentOnInput, syntaxHighlighting, defaultHighlightStyle, bracketMatching} from "@codemirror/language"
 import {highlightSelectionMatches, searchKeymap} from "@codemirror/search"
 import {closeBrackets, autocompletion, closeBracketsKeymap, completionKeymap} from "@codemirror/autocomplete"
-import {EditorState} from "@codemirror/state"
+import {EditorState, Extension} from "@codemirror/state"
 // Custom CodeMirror setup
 import {StreamLanguage} from "@codemirror/language"
 import {clike} from "@codemirror/legacy-modes/mode/clike"
@@ -32,39 +32,46 @@ const faustLanguage = StreamLanguage.define(clike({
     }
 }))
 
-export function createEditor(parent: HTMLElement, doc: string) {
+export interface editorConfig {
+    showLineNumbers: boolean
+}
+
+export function createEditor(parent: HTMLElement, doc: string, {showLineNumbers = true}: editorConfig) {
+    const extensions: Extension[] = [
+        highlightActiveLineGutter(),
+        highlightSpecialChars(),
+        history(),
+        // foldGutter(),
+        drawSelection(),
+        dropCursor(),
+        EditorState.allowMultipleSelections.of(true),
+        indentOnInput(),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        bracketMatching(),
+        closeBrackets(),
+        autocompletion(),
+        rectangularSelection(),
+        crosshairCursor(),
+        highlightActiveLine(),
+        highlightSelectionMatches(),
+        keymap.of([
+            ...closeBracketsKeymap,
+            ...defaultKeymap,
+            ...searchKeymap,
+            ...historyKeymap,
+            ...completionKeymap,
+            ...lintKeymap
+        ]),
+        faustLanguage,
+    ];
+
+    showLineNumbers && extensions.push(lineNumbers());
+
     return new EditorView({
         parent,
         doc,
-        extensions: [
-            lineNumbers(),
-            highlightActiveLineGutter(),
-            highlightSpecialChars(),
-            history(),
-            // foldGutter(),
-            drawSelection(),
-            dropCursor(),
-            EditorState.allowMultipleSelections.of(true),
-            indentOnInput(),
-            syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-            bracketMatching(),
-            closeBrackets(),
-            autocompletion(),
-            rectangularSelection(),
-            crosshairCursor(),
-            highlightActiveLine(),
-            highlightSelectionMatches(),
-            keymap.of([
-                ...closeBracketsKeymap,
-                ...defaultKeymap,
-                ...searchKeymap,
-                ...historyKeymap,
-                ...completionKeymap,
-                ...lintKeymap
-            ]),
-            faustLanguage,
-        ],
-    })
+        extensions
+    });
 }
 
 export function setError(editor: EditorView, error: Error) {
